@@ -1,3 +1,5 @@
+<img src="assets/dayora-logo.png" alt="Dayora" width="72">
+
 # Dayora agent skills
 
 Agent skills from [Dayora](https://www.dayora.ai/?utm_source=skills_sh&utm_medium=agent_skill), the AI journaling app. They work with Claude Code, Cursor, Codex and the other agents that read `SKILL.md`.
