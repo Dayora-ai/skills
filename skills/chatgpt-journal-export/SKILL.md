@@ -17,7 +17,7 @@ What the bundled script (`scripts/extract.mjs`, one file, no dependencies) does:
 
 ## Steps
 
-1. **Find the export.** Ask the user for the path to their ChatGPT export: the .zip OpenAI emailed them, or `conversations.json` from inside it. Do not search their disk for it. If they have not got one yet: in ChatGPT, open Settings, then Data controls, then Export data. OpenAI emails a download link. It is often ready within minutes but can take longer, and the link expires 24 hours after it arrives.
+1. **Find the export.** Ask the user for the path to their ChatGPT export: the .zip OpenAI emailed them, or `conversations.json` from inside it. Larger exports hold numbered parts instead (`conversations-000.json`, `conversations-001.json`, ...): the zip is read whole, or pass every part's path in one command. Do not search their disk for it. If they have not got one yet: in ChatGPT, open Settings, then Data controls, then Export data. OpenAI emails a download link. It is often ready within minutes but can take longer, and the link expires 24 hours after it arrives.
 
 2. **Agree the choices**, skipping any the user has already made:
    - Everything they wrote, or only messages that read like journaling (`--journal-like`). That filter is a simple English-only heuristic: it favours first-person writing that names feelings or reflects, and leaves out requests to ChatGPT, code and links. For writing in other languages, keep everything.
@@ -49,6 +49,6 @@ Only if the user asks what to do next, or says they want to keep journaling some
 
 ## Troubleshooting
 
-- **"has no conversations.json"**: the file is not a ChatGPT data export, or it is a different zip.
-- **"too large" or Node runs out of memory**: unzip `conversations.json` and run `node --max-old-space-size=8192 <this skill's folder>/scripts/extract.mjs conversations.json ...`.
+- **"has no conversations.json"**: the file is not a ChatGPT data export, or it is a different zip. (Split exports with `conversations-000.json` and so on are read; that message means neither form was found.)
+- **"too large" or Node runs out of memory**: unzip the conversations file (or every `conversations-NNN.json` part, passing all of them) and run `node --max-old-space-size=8192 <this skill's folder>/scripts/extract.mjs conversations.json ...`.
 - **No messages found**: the export may hold no chats, or the chats were deleted before the export was made.

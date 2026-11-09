@@ -19,7 +19,10 @@ const DEFAULT_MIN_SCORE = 0.5
 /** A timestamp more than a day ahead of this machine's clock is treated as missing, not trusted. */
 const FUTURE_TOLERANCE_MS = 24 * 60 * 60 * 1000
 
-const USAGE = `Usage: node extract.mjs <export.zip | conversations.json> [options]
+const USAGE = `Usage: node extract.mjs <export.zip | conversations.json | conversations-000.json ...> [options]
+
+Larger exports are split into conversations-000.json, conversations-001.json
+and so on; the zip is read whole, or pass every part.
 
 Writes the messages YOU wrote in a ChatGPT data export to dated Markdown.
 ChatGPT's replies are left out. Nothing leaves this machine.
@@ -48,7 +51,7 @@ function fail(message, code = 1) {
 
 function parseArgs(argv) {
   const opts = {
-    input: null,
+    inputs: [],
     out: 'chatgpt-journal',
     split: 'none',
     journalLike: false,
@@ -78,11 +81,13 @@ function parseArgs(argv) {
         process.exit(0)
       default:
         if (arg.startsWith('-')) fail(`Unknown option ${arg}.\n\n${USAGE}`, 2)
-        if (opts.input) fail(`Give one export file, not two.\n\n${USAGE}`, 2)
-        opts.input = arg
+        opts.inputs.push(arg)
     }
   }
-  if (!opts.input) fail(USAGE, 2)
+  if (!opts.inputs.length) fail(USAGE, 2)
+  if (opts.inputs.length > 1 && !opts.inputs.every((f) => f.toLowerCase().endsWith('.json'))) {
+    fail(`Give one export zip, or the conversations .json files from inside it.\n\n${USAGE}`, 2)
+  }
   if (!['none', 'day', 'month'].includes(opts.split)) fail('--split must be none, day or month.', 2)
   if (!Number.isFinite(opts.minScore) || opts.minScore < 0 || opts.minScore > 1) {
     fail('--min-score must be a number from 0 to 1.', 2)
@@ -98,6 +103,10 @@ function parseArgs(argv) {
 
 // ---------------------------------------------------------------------------
 // Reading the export: conversations.json, or the .zip OpenAI emails.
+// Larger exports are split into numbered parts (conversations-000.json,
+// conversations-001.json, ...), each an array in the old file's shape. Every
+// part is read, in numeric order, and a conversation in more than one part
+// (an export holding both forms) is kept once.
 // The zip is read by offset, so the images and audio in a large export are
 // never loaded.
 // ---------------------------------------------------------------------------
@@ -159,6 +168,8 @@ function readConversationsFromZip(file) {
     }
 
     const directory = readAt(fd, directoryOffset, directorySize)
+    const parts = []
+    let total = 0
     let cursor = 0
     for (let i = 0; i < count; i++) {
       if (cursor + 46 > directory.length || directory.readUInt32LE(cursor) !== 0x02014b50) {
@@ -179,7 +190,7 @@ function readConversationsFromZip(file) {
       const extra = directory.subarray(cursor + 46 + nameLength, cursor + 46 + nameLength + extraLength)
       cursor += 46 + nameLength + extraLength + commentLength
 
-      if (!/(^|\/)conversations\.json$/i.test(name) || name.includes('__MACOSX/')) continue
+      if (!PART.test(name) || name.includes('__MACOSX/')) continue
 
       // ZIP64 sizes and offset live in extra field 0x0001, in this order,
       // for whichever of the three were too large for 32 bits.
@@ -206,7 +217,14 @@ function readConversationsFromZip(file) {
       }
 
       if (flags & 1) throw new ExportError('That zip is password protected. Unzip it yourself and pass conversations.json.')
-      if (plain > MAX_JSON_BYTES) throw new ExportError(TOO_LARGE)
+      total += plain
+      if (plain > MAX_JSON_BYTES || total > MAX_JSON_BYTES) throw new ExportError(TOO_LARGE)
+      parts.push({ name, method, compressed, plain, localAt })
+    }
+    if (!parts.length) throw new ExportError('That zip has no conversations.json, so it is probably not a ChatGPT data export.')
+
+    const texts = []
+    for (const { name, method, compressed, plain, localAt } of parts.sort((a, b) => byPart(a.name, b.name))) {
       if (localAt + 30 > size) throw new ExportError(DAMAGED)
       const header = readAt(fd, localAt, 30)
       if (header.readUInt32LE(0) !== 0x04034b50) throw new ExportError(DAMAGED)
@@ -227,15 +245,61 @@ function readConversationsFromZip(file) {
         throw new ExportError('That zip uses a compression method this script cannot read. Unzip it and pass conversations.json.')
       }
       if (text.length !== plain) throw new ExportError(DAMAGED)
-      return text.toString('utf8')
+      texts.push({ name, text: text.toString('utf8') })
     }
-    throw new ExportError('That zip has no conversations.json, so it is probably not a ChatGPT data export.')
+    return texts
   } finally {
     fs.closeSync(fd)
   }
 }
 
-function readExport(file) {
+const PART = /(?:^|\/)conversations(?:-(\d+))?\.json$/i
+const partRank = (name) => {
+  const n = PART.exec(name)?.[1]
+  return n === undefined ? -1 : Number(n)
+}
+const byPart = (a, b) => partRank(a) - partRank(b) || a.localeCompare(b)
+
+function parseJson(name, text) {
+  try {
+    return JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text)
+  } catch {
+    throw new ExportError(`${path.basename(name)} is not valid JSON. The export may be incomplete; download it again.`)
+  }
+}
+
+/** The export's conversations: one file as it is, several parts merged in order. */
+function readExport(files) {
+  let texts
+  if (files.length === 1 && files[0].toLowerCase().endsWith('.zip')) {
+    statFile(files[0])
+    texts = readConversationsFromZip(files[0])
+  } else if (files.every((file) => file.toLowerCase().endsWith('.json'))) {
+    const total = files.reduce((sum, file) => sum + statFile(file).size, 0)
+    if (total > MAX_JSON_BYTES) throw new ExportError(TOO_LARGE)
+    texts = [...files].sort((a, b) => byPart(path.basename(a), path.basename(b)))
+      .map((file) => ({ name: file, text: fs.readFileSync(file, 'utf8') }))
+  } else {
+    throw new ExportError('Pass the .zip that OpenAI emailed, or the conversations .json files from inside it.')
+  }
+
+  if (texts.length === 1) return parseJson(texts[0].name, texts[0].text)
+  const merged = []
+  const seen = new Set()
+  for (const { name, text } of texts) {
+    for (const chat of conversationsOf(parseJson(name, text))) {
+      const id = typeof chat?.conversation_id === 'string' ? chat.conversation_id : typeof chat?.id === 'string' ? chat.id : null
+      if (id !== null) {
+        if (seen.has(id)) continue
+        seen.add(id)
+      }
+      merged.push(chat)
+    }
+  }
+  return merged
+}
+
+function statFile(file) {
   let stat
   try {
     stat = fs.statSync(file)
@@ -243,23 +307,7 @@ function readExport(file) {
     throw new ExportError(`Cannot find ${file}.`)
   }
   if (!stat.isFile()) throw new ExportError(`${file} is not a file.`)
-
-  const lower = file.toLowerCase()
-  let text
-  if (lower.endsWith('.zip')) {
-    text = readConversationsFromZip(file)
-  } else if (lower.endsWith('.json')) {
-    if (stat.size > MAX_JSON_BYTES) throw new ExportError(TOO_LARGE)
-    text = fs.readFileSync(file, 'utf8')
-  } else {
-    throw new ExportError('Pass the .zip that OpenAI emailed, or the conversations.json file from inside it.')
-  }
-
-  try {
-    return JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text)
-  } catch {
-    throw new ExportError('conversations.json is not valid JSON. The export may be incomplete; download it again.')
-  }
+  return stat
 }
 
 // ---------------------------------------------------------------------------
@@ -455,7 +503,7 @@ function main() {
   const opts = parseArgs(process.argv.slice(2))
   let raw
   try {
-    raw = readExport(opts.input)
+    raw = readExport(opts.inputs)
   } catch (err) {
     if (err instanceof ExportError) fail(err.message)
     throw err
