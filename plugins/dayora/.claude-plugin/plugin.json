@@ -1,0 +1,20 @@
+{
+  "name": "dayora",
+  "displayName": "Dayora",
+  "version": "1.0.0",
+  "description": "Use your Dayora journal with your permission: read and search your entries, Dayora's replies and your day moods, and, if you allow it, save a new entry or log a mood. Bundles Dayora's MCP server with a skill that keeps a private journal private.",
+  "author": {
+    "name": "Dayora",
+    "email": "human@dayora.ai",
+    "url": "https://www.dayora.ai"
+  },
+  "homepage": "https://www.dayora.ai/how-to/connect-claude-chatgpt?utm_source=plugin_directory&utm_medium=directory&utm_campaign=plugin_bundle",
+  "repository": "https://github.com/Dayora-ai/skills",
+  "license": "MIT",
+  "keywords": ["journal", "journaling", "diary", "mood", "reflection"],
+  "icon": "./assets/logo.png",
+  "documentationUrl": "https://www.dayora.ai/how-to/connect-claude-chatgpt",
+  "supportUrl": "https://www.dayora.ai/contact",
+  "privacyPolicyUrl": "https://www.dayora.ai/privacy",
+  "termsOfServiceUrl": "https://www.dayora.ai/terms"
+}

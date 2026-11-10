@@ -1,0 +1,16 @@
+{
+  "name": "dayora",
+  "owner": {
+    "name": "Dayora",
+    "email": "human@dayora.ai"
+  },
+  "description": "Dayora's plugin: your Dayora journal in Claude, with a skill for handling it with care.",
+  "plugins": [
+    {
+      "name": "dayora",
+      "source": "./plugins/dayora",
+      "description": "Read and search your Dayora journal, Dayora's replies and your day moods, and, if you allow it, save a new entry or log a mood.",
+      "category": "productivity"
+    }
+  ]
+}

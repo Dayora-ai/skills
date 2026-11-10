@@ -41,6 +41,10 @@ npx skills add dayora-ai/skills --skill chatgpt-journal-export
 - **Only what you wrote:** ChatGPT's replies, custom instructions and hidden context are left out. Each message keeps its original date; none is invented.
 - **Your text stays out of the agent:** the script prints counts and file names, never the writing.
 
+## The Dayora plugin
+
+[`plugins/dayora`](plugins/dayora) bundles Dayora's MCP server with the `dayora` skill, so one install connects your journal and teaches the agent how to treat it. In Claude Code: `/plugin install dayora --marketplace Dayora-ai/skills`.
+
 ## Issues
 
 Open an issue in this repository.

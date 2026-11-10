@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "dayora": {
+      "type": "http",
+      "url": "https://www.dayora.ai/api/mcp"
+    }
+  }
+}
